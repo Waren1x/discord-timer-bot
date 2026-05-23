@@ -8,7 +8,7 @@ const {
     EmbedBuilder
 } = require('discord.js');
 
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 
 const client = new Client({
     intents: [
@@ -19,7 +19,7 @@ const client = new Client({
     ]
 });
 
-const db = new sqlite3.Database('./database.sqlite');
+const db = new Database('./database.sqlite');
 
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
