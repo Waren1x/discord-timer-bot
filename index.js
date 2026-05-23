@@ -72,146 +72,146 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const member = interaction.member;
 
+    if (!member || !member.voice) {
+
+        return interaction.reply({
+            content: '❌ Nepodařilo se načíst voice.',
+            ephemeral: true
+        });
+    }
+
     const voiceChannel = member.voice.channel;
 
     if (!voiceChannel && interaction.customId !== 'leaderboard') {
+
         return interaction.reply({
             content: '❌ Musíš být ve voice roomce.',
             ephemeral: true
         });
     }
 
+    // ONLINE
     if (interaction.customId === 'online') {
 
-        db.get(
-            'SELECT * FROM users WHERE userId = ?',
-            [member.id],
-            (err, row) => {
+        const row = db
+            .prepare('SELECT * FROM users WHERE userId = ?')
+            .get(member.id);
 
-                const now = Math.floor(Date.now() / 1000);
+        const now = Math.floor(Date.now() / 1000);
 
-                if (row && row.active === 1) {
-                    return interaction.reply({
-                        content: '⏳ Timer už běží.',
-                        ephemeral: true
-                    });
-                }
+        if (row && row.active === 1) {
 
-                db.run(
-                    `INSERT OR REPLACE INTO users
-                    (userId, username, totalTime, startTime, active)
-                    VALUES (?, ?, ?, ?, ?)`,
-                    [
-                        member.id,
-                        member.user.username,
-                        row ? row.totalTime : 0,
-                        now,
-                        1
-                    ]
-                );
+            return interaction.reply({
+                content: '⏳ Timer už běží.',
+                ephemeral: true
+            });
+        }
 
-                interaction.reply({
-                    content: '🟢 Timer zapnut.',
-                    ephemeral: true
-                });
-            }
+        db.prepare(`
+            INSERT OR REPLACE INTO users
+            (userId, username, totalTime, startTime, active)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(
+            member.id,
+            member.user.username,
+            row ? row.totalTime : 0,
+            now,
+            1
         );
+
+        return interaction.reply({
+            content: '🟢 Timer zapnut.',
+            ephemeral: true
+        });
     }
 
+    // OFFLINE
     if (interaction.customId === 'offline') {
 
-        db.get(
-            'SELECT * FROM users WHERE userId = ?',
-            [member.id],
-            (err, row) => {
+        const row = db
+            .prepare('SELECT * FROM users WHERE userId = ?')
+            .get(member.id);
 
-                if (!row || row.active === 0) {
-                    return interaction.reply({
-                        content: '❌ Timer neběží.',
-                        ephemeral: true
-                    });
-                }
+        if (!row || row.active === 0) {
 
-                const now = Math.floor(Date.now() / 1000);
-                const sessionTime = now - row.startTime;
-                const newTotal = row.totalTime + sessionTime;
+            return interaction.reply({
+                content: '❌ Timer neběží.',
+                ephemeral: true
+            });
+        }
 
-                db.run(
-                    `UPDATE users
-                    SET totalTime = ?, active = 0, startTime = 0
-                    WHERE userId = ?`,
-                    [newTotal, member.id]
-                );
+        const now = Math.floor(Date.now() / 1000);
+        const sessionTime = now - row.startTime;
+        const newTotal = row.totalTime + sessionTime;
 
-                interaction.reply({
-                    content: `🔴 Timer vypnut. Přidáno ${formatTime(sessionTime)}`,
-                    ephemeral: true
-                });
-            }
-        );
+        db.prepare(`
+            UPDATE users
+            SET totalTime = ?, active = 0, startTime = 0
+            WHERE userId = ?
+        `).run(newTotal, member.id);
+
+        return interaction.reply({
+            content: `🔴 Timer vypnut. Přidáno ${formatTime(sessionTime)}`,
+            ephemeral: true
+        });
     }
 
+    // LEADERBOARD
     if (interaction.customId === 'leaderboard') {
 
-        db.all(
-            `SELECT * FROM users
-             ORDER BY totalTime DESC
-             LIMIT 10`,
-            [],
-            async (err, rows) => {
+        const rows = db.prepare(`
+            SELECT * FROM users
+            ORDER BY totalTime DESC
+            LIMIT 10
+        `).all();
 
-                if (!rows.length) {
-                    return interaction.reply({
-                        content: 'Žádná data.',
-                        ephemeral: true
-                    });
-                }
+        if (!rows.length) {
 
-                let text = '';
+            return interaction.reply({
+                content: 'Žádná data.',
+                ephemeral: true
+            });
+        }
 
-                rows.forEach((user, index) => {
-                    text += `${index + 1}. ${user.username} - ${formatTime(user.totalTime)}\n`;
-                });
+        let text = '';
 
-                const embed = new EmbedBuilder()
-                    .setTitle('🏆 TOP 10')
-                    .setDescription(text);
+        rows.forEach((user, index) => {
+            text += `${index + 1}. ${user.username} - ${formatTime(user.totalTime)}\n`;
+        });
 
-                interaction.reply({
-                    embeds: [embed]
-                });
-            }
-        );
+        const embed = new EmbedBuilder()
+            .setTitle('🏆 TOP 10')
+            .setDescription(text);
+
+        return interaction.reply({
+            embeds: [embed]
+        });
     }
 });
 
-client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+client.on(Events.VoiceStateUpdate, (oldState, newState) => {
 
     if (oldState.channel && !newState.channel) {
 
         const userId = oldState.member.id;
 
-        db.get(
-            'SELECT * FROM users WHERE userId = ?',
-            [userId],
-            (err, row) => {
+        const row = db
+            .prepare('SELECT * FROM users WHERE userId = ?')
+            .get(userId);
 
-                if (!row || row.active === 0) return;
+        if (!row || row.active === 0) return;
 
-                const now = Math.floor(Date.now() / 1000);
-                const sessionTime = now - row.startTime;
-                const newTotal = row.totalTime + sessionTime;
+        const now = Math.floor(Date.now() / 1000);
+        const sessionTime = now - row.startTime;
+        const newTotal = row.totalTime + sessionTime;
 
-                db.run(
-                    `UPDATE users
-                     SET totalTime = ?, active = 0, startTime = 0
-                     WHERE userId = ?`,
-                    [newTotal, userId]
-                );
+        db.prepare(`
+            UPDATE users
+            SET totalTime = ?, active = 0, startTime = 0
+            WHERE userId = ?
+        `).run(newTotal, userId);
 
-                console.log(`${oldState.member.user.username} automaticky odpojen.`);
-            }
-        );
+        console.log(`${oldState.member.user.username} automaticky odpojen.`);
     }
 });
 
