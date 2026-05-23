@@ -21,7 +21,7 @@ const client = new Client({
 
 const db = new Database('./database.sqlite');
 
-db.run(`
+db.prepare(`
 CREATE TABLE IF NOT EXISTS users (
     userId TEXT PRIMARY KEY,
     username TEXT,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     startTime INTEGER DEFAULT 0,
     active INTEGER DEFAULT 0
 )
-`);
+`).run();
 
 client.once(Events.ClientReady, () => {
     console.log(`Bot přihlášen jako ${client.user.tag}`);
